@@ -1,0 +1,318 @@
+;; -* - lisp -*-
+
+(in-package :it.bese.qbook)
+
+;;;; * The qbook lisp documentation system
+
+;;;; qbook generates html formatted code listings of common lisp
+;;;; source files. Comments in the source code are rendered as html
+;;;; paragraphs, text is rendered in <pre> blocks. Headings are
+;;;; created by preceding the text of the comment with one or more #\*
+;;;; chars.
+
+;;;; This is inspired by Luke Gorrie's pbook.el.
+
+;;;; ** Publishing
+
+;;;; This is the core of qbook, the driver code which takes a lisp
+;;;; source file and generates an html file.
+
+;;;; *** The public entry point: PUBLISH-QBOOK
+
+(defclass generator ()
+  ((title :accessor title :initarg :title)))
+
+(defgeneric generate (sections generator))
+
+(defun publish-qbook (file-name generator)
+  "Convert FILE-NAME into a qbook html file named OUTPUT-FILE with title TITLE."
+  (let ((parts (read-source-file file-name)))
+    (let ((sections '()))
+      (iterate
+	(for p in parts)
+	(if (and (heading-part-p p)
+		 (= 1 (depth p)))
+	    (push (list p) sections)
+	    (if (consp sections)
+		(push p (car sections))
+		(error "No initial heading in ~S." file-name))))
+      (iterate
+        (for section on sections)
+        (setf (car section) (nreverse (car section))))
+      (generate (nreverse sections) generator))))
+
+;;;; ** Publishing internals
+
+;;;; *** The classes
+
+;;;; qbook parses lisp code into a list of source-file-part
+;;;; objects. we have an object for code parts (each top level form is
+;;;; considered as a single code object), for comments and for
+;;;; headings.
+
+(defclass source-file-part ()
+  ((start-position :accessor start-position :initform nil :initarg :start-position)
+   (end-position :accessor end-position :initform nil :initarg :end-position)
+   (text :accessor text :initform nil :initarg :text)
+   (origin-file :accessor origin-file :initform nil :initarg :origin-file)))
+
+(defclass code-part (source-file-part)
+  ((form :accessor form :initform nil :initarg :form)))
+
+(defclass comment-part (source-file-part)
+  ())
+
+(defgeneric comment-part-p (obj)
+  (:method ((obj t)) nil)
+  (:method ((obj comment-part)) t))
+
+(defclass heading-part (comment-part)
+  ((depth :accessor depth :initarg :depth)
+   (next-part :accessor next-part :initform nil)
+   (prev-part :accessor prev-part :initform nil)
+   (up-part :accessor up-part :initform nil)))
+
+(defmethod print-object ((h heading-part) stream)
+  (print-unreadable-object (h stream :type t :identity nil)
+    (format stream "~D ~S" (depth h) (text h))))
+
+(defgeneric heading-part-p (obj)
+  (:method ((obj t)) nil)
+  (:method ((obj heading-part)) t))
+
+(defclass whitespace-part (source-file-part)
+  ())
+
+;;;; *** The publishing engine
+
+;;;; ** Directives
+
+;;;; Directives are a way to control how qbook processes the lisp
+;;;; code. We currently only support the '@include "filename"'
+;;;; directive. @include allows multiple source files to be combined
+;;;; to form a single html file.
+
+(defgeneric process-directive (part))
+
+(defmethod process-directive ((part source-file-part))
+  (list part))
+
+(defmethod process-directive ((part comment-part))
+  (declare (special *source-file*))
+  (multiple-value-bind (matchp strings)
+      (cl-ppcre:scan-to-strings "^@include (.*)" (text part))
+    (if matchp
+	(return-from process-directive (read-source-file
+					(merge-pathnames (let ((*readtable* (copy-readtable nil)))
+							   (read-from-string (aref strings 0)))
+							 (truename *source-file*))))
+	(return-from process-directive (list part)))))
+
+;;;; ** Parsing
+
+;;;; A qbook source file is a lisp source file. Qbook uses the lisp's
+;;;; reader to parse the code (so any valid lisp should be
+;;;; usable). qbook looks for a few things in the lisp file:
+
+;;;; 1) The code. Each top level form is wrapped in <PRE> tagged as
+;;;;    pased through to the HTML. The first line (not form) of the
+;;;;    top level form is presented in a bold font. If the form is
+;;;;    longer than 3 lines it will be truncated to 3 lines and
+;;;;    readers will have to click an the form to see the hidden text.
+
+;;;; 2) ;;;; Comments - All lines which start with 4 #\; ("^;;;;") and
+;;;;    aren't within a top level form are wrapped in a <P> tag and
+;;;;    passed through.
+
+;;;; 3) ; Comments - All comment lines with less than 4 #\; characters
+;;;;    are ignored by qbook.
+
+;;;; 4) @ directives - Lines which start with ;;;;@ are qbook
+;;;;    directives. These allow the developer to control how qbook
+;;;;    processes the source files. Currently the only supported
+;;;;    directive is include.
+
+;;;; A decent example of a qbook'd lisp file is qbook
+;;;; itself. qbook.asd contains the include directives which control
+;;;; the order of the sections while the various .lisp files contain
+;;;; qbook comments, qbook headings and ignored comments (every source
+;;;; file contains a copyright message which we don't want to have
+;;;; repeated multiple times in the html)
+
+;;;; *** qbook markup
+
+;;;; There is none. You simply can't create tables or produce links or
+;;;; bold text. Patches welcome.
+
+(defun make-part-reader (function type)
+  (lambda (stream echar)
+    (let ((part (make-instance type)))
+      (setf (start-position part) (file-position stream))
+      (funcall function stream echar)
+      (setf (end-position part) (file-position stream))
+      part)))
+
+(defun make-qbook-readtable ()
+  (iterate
+    (with r = (copy-readtable nil))
+    (for i from 0 below 256)
+    (for char = (code-char i))
+    (when (get-macro-character char)
+      (multiple-value-bind (function non-terminating-p)
+	  (get-macro-character char *readtable*)
+	(set-macro-character char
+			     (case char
+			       (#\; (make-part-reader function 'comment-part))
+			       (#\( (make-part-reader function 'code-part))
+			       (t (make-part-reader function 'code-part)))
+			     non-terminating-p
+			     r)))
+    (finally (return r))))
+
+(defun whitespacep (char)
+  (and char
+       (member char '(#\Space #\Tab #\Newline) :test #'char=)))
+
+(defun read-whitespace (stream)
+  (iterate
+    (with part = (make-instance 'whitespace-part))
+    (initially (setf (start-position part) (1+ (file-position stream))))
+    (while (whitespacep (peek-char nil stream nil nil)))
+    (read-char stream)
+    (finally (setf (end-position part) (file-position stream)))
+    (finally (return-from read-whitespace part))))
+
+(defun process-directives (parts)
+  (iterate
+    (for part in parts)
+    (appending (process-directive part))))
+
+(defun read-source-file (file-name)
+  (let* ((*readtable* (make-qbook-readtable))
+	 (*source-file* file-name)
+	 (parts (with-input-from-file (stream file-name)
+		  (iterate
+		    (for part in-stream stream using #'read)
+		    (collect part)
+		    (when (whitespacep (peek-char nil stream nil nil))
+		      (collect (read-whitespace stream)))))))
+    (declare (special *source-file*))
+    (with-input-from-file (stream file-name)
+      (let ((buffer nil))
+	(dolist (part parts)
+	  (file-position stream (1- (start-position part)))
+	  (setf buffer (make-array (1+ (- (end-position part) (start-position part)))
+				   :element-type 'character))
+	  (read-sequence buffer stream)
+	  (setf (text part) buffer
+		(origin-file part) file-name))))    
+    (setf parts (post-process parts)
+	  parts (process-directives parts)
+	  parts (post-process-navigation parts))
+    ;; remove all the parts before the first comment part
+    (setf parts
+	  (iterate
+	    (for p on parts)
+	    (until (comment-part-p (first p)))
+	    (finally (return p))))
+    parts))
+
+(defun heading-text-p (text)
+  (scan "^;;;;\\s*\\*+" text))
+
+(defun real-comment-p (text)
+  (scan "^;;;;" text))
+
+(defun post-process (parts)
+  ;; convert all the comments which are acutally headings to heading
+  ;; objects
+  (setf parts
+	(iterate
+	  (for p in parts)
+	  (typecase p
+	    (comment-part
+	     (multiple-value-bind (match strings)
+		 (scan-to-strings (create-scanner ";;;;\\s*(\\*+)\\s*(.*)" :single-line-mode nil) (text p))
+	       (if match
+		   (collect (make-instance 'heading-part
+					   :depth (length (aref strings 0))
+					   :text (aref strings 1)
+					   :start-position (start-position p)
+					   :end-position (end-position p)
+					   :origin-file (origin-file p)))
+		   (multiple-value-bind (match strings)
+		       (scan-to-strings (create-scanner ";;;;(.*)" :single-line-mode t) (text p))
+		     (if match
+			 (collect (make-instance 'comment-part
+						 :start-position (start-position p)
+						 :end-position (end-position p)
+						 :text (aref strings 0)
+						 :origin-file (origin-file p))))))))
+	    ((or code-part whitespace-part) (collect p)))))
+  ;;;; merge consequtive comments together
+  (setf parts
+	(iterate
+	  (with comment = (make-string-output-stream))
+	  (for (p next) on parts)
+	  (cond
+	    ((heading-part-p p) (collect p))
+	    ((and (comment-part-p p)
+		  (or (not (comment-part-p next))
+		      (heading-part-p next)
+		      (null next)))
+	     (write-string (text p) comment)
+	     (collect (make-instance 'comment-part :text (get-output-stream-string comment)))
+	     (setf comment (make-string-output-stream)))
+	    ((comment-part-p p)
+	     (write-string (text p) comment))
+	    (t (collect p)))))
+  parts)
+
+(defun post-process-navigation (parts)
+    ;;;; setup the prev and next links in the header objects
+  (iterate
+    (with last-heading = nil)
+    (for part in parts)
+    (when (heading-part-p part)
+      (when last-heading
+	(setf (prev-part part) last-heading
+	      (next-part last-heading) part))
+      (setf last-heading part)))
+  ;;;; setup the up links
+  (iterate
+    (for (this . rest) on (remove-if-not #'heading-part-p parts))
+    (iterate
+      (for r in rest)
+      (while (< (depth this) (depth r)))
+      (setf (up-part r) this)))
+  parts)
+
+;; Copyright (c) 2005, Edward Marco Baringer
+;; All rights reserved. 
+;; 
+;; Redistribution and use in source and binary forms, with or without
+;; modification, are permitted provided that the following conditions are
+;; met:
+;; 
+;;  - Redistributions of source code must retain the above copyright
+;;    notice, this list of conditions and the following disclaimer.
+;; 
+;;  - Redistributions in binary form must reproduce the above copyright
+;;    notice, this list of conditions and the following disclaimer in the
+;;    documentation and/or other materials provided with the distribution.
+;;
+;;  - Neither the name of Edward Marco Baringer, nor BESE, nor the names
+;;    of its contributors may be used to endorse or promote products
+;;    derived from this software without specific prior written permission.
+;; 
+;; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+;; "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+;; LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+;; A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+;; OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+;; SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+;; LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+;; DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+;; THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+;; (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+;; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
