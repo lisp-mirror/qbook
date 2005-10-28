@@ -5,10 +5,10 @@
 (defclass html-generator (generator)
   ((output-directory :initarg :output-directory :accessor output-directory)))
 
-(defmethod generate (sections (generator html-generator))
+(defmethod generate (book (generator html-generator))
   (ensure-directories-exist (output-directory generator))
-  (generate-table-of-contents sections generator)
-  (dolist (section sections)
+  (generate-table-of-contents (contents book) generator)
+  (dolist (section (contents book))
     (generate-section section generator)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)

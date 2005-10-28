@@ -22,7 +22,11 @@
 (defclass generator ()
   ((title :accessor title :initarg :title)))
 
-(defgeneric generate (sections generator))
+(defgeneric generate (book generator))
+
+(defclass book ()
+  ((title :accessor title :initarg :title)
+   (contents :accessor contents :initarg :contents)))
 
 (defun publish-qbook (file-name generator)
   "Convert FILE-NAME into a qbook html file named OUTPUT-FILE with title TITLE."
@@ -39,7 +43,9 @@
       (iterate
         (for section on sections)
         (setf (car section) (nreverse (car section))))
-      (generate (nreverse sections) generator))))
+      (generate (make-instance 'book :title (title generator)
+                                     :contents (nreverse sections))
+                generator))))
 
 ;;;; ** Publishing internals
 

@@ -19,7 +19,7 @@
 
 (defgeneric generate-part (part))
 
-(defmethod generate (sections (generator latex-generator))
+(defmethod generate (book (generator latex-generator))
   (with-output-to-file (*latex-stream* (output-file generator)
                                        :if-exists :supersede
                                        :if-does-not-exist :create)
@@ -30,7 +30,7 @@
     (\\command "begin" "document")
     (\\command "maketitle")
     (\\command "tableofcontents")
-    (dolist (section sections)
+    (dolist (section (contents book))
       (dolist (part section)
         (generate-part part)))
     (\\command "end" "document")))
