@@ -28,7 +28,24 @@
   ((title :accessor title :initarg :title
           :documentation "The title of the book.")
    (contents :accessor contents :initarg :contents)
-   (indexes :accessor indexes :initarg :indexes :initform '())))
+   (indexes :accessor indexes :initarg :indexes :initform (make-hash-table :test 'eq))))
+
+(defmethod book-indexes-sorted ((book book))
+  (sort (hash-table-keys (indexes book))
+        #'string<
+        :key (lambda (descriptor-class)
+               (pretty-label-prefix (make-instance descriptor-class)))))
+
+(defun compare-descriptor-names (a b)
+  (string< (regex-replace-all "[^A-Za-z]" (string (name a)) "")
+           (regex-replace-all "[^A-Za-z]" (string (name b)) "")))
+
+(defun sort-descriptors (descriptors)
+  (sort (copy-list descriptors) 'compare-descriptor-names))
+
+(defun sort-parts-with-descriptors (parts)
+  (sort (remove-if #'null parts :key #'descriptor)
+        'compare-descriptor-names :key #'descriptor))
 
 (defun publish-qbook (file-name generator)
   "Convert FILE-NAME into a qbook html file named OUTPUT-FILE with title TITLE."
@@ -45,10 +62,22 @@
       (iterate
         (for section on sections)
         (setf (car section) (nreverse (car section))))
-      (generate (make-instance 'book
-                               :title (title generator)
-                               :contents (nreverse sections))
-                generator))))
+      ;; build up the function indexes
+      (let ((book (make-instance 'book
+                                 :title (title generator)
+                                 :contents (nreverse sections))))
+        (loop
+           for section in (contents book)
+           do (loop
+                 for part in section
+                 when (code-part-p part)
+                   do (when (descriptor part)
+                        (symbol-macrolet ((index-table
+                                           (gethash (class-of (descriptor part)) (indexes book))))
+                          (unless index-table
+                            (setf index-table (make-hash-table :test 'eql)))
+                          (setf (gethash (name (descriptor part)) index-table) part)))))
+        (generate book generator)))))
 
 ;;;; ** Publishing internals
 
@@ -63,11 +92,16 @@
   ((start-position :accessor start-position :initform nil :initarg :start-position)
    (end-position :accessor end-position :initform nil :initarg :end-position)
    (text :accessor text :initform nil :initarg :text)
-   (origin-file :accessor origin-file :initform nil :initarg :origin-file)))
+   (origin-file :accessor origin-file :initform nil :initarg :origin-file)
+   (output-file :accessor output-file :initform nil)))
 
 (defclass code-part (source-file-part)
   ((form :accessor form :initform nil :initarg :form)
    (descriptor :accessor descriptor :initform nil :initarg :descriptor)))
+
+(defgeneric code-part-p (object)
+  (:method ((object t)) nil)
+  (:method ((object code-part)) t))
 
 (defclass comment-part (source-file-part)
   ())

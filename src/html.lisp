@@ -9,12 +9,17 @@
 
 (defvar *generator*)
 
+(defvar *book*)
+
 (defmethod generate (book (generator html-generator))
-  (let ((*generator* generator))
+  (let ((*generator* generator)
+        (*book* book))
     (ensure-directories-exist (output-directory generator))
     (generate-table-of-contents (contents book) generator)
     (dolist (section (contents book))
-      (generate-section section generator))))
+      (generate-section section generator))
+    (dolist (index-class (book-indexes-sorted book))
+      (generate-index generator book index-class))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css") &body body)
@@ -41,7 +46,31 @@
            (when (heading-part-p part)
              (<:div :class (strcat "contents-heading-" (depth part))
                     (<:a :href (make-anchor-link part)
-                         (<:as-html (text part)))))))))))
+                         (<:as-html (text part)))))))
+       (<:div :class "contents-heading-1"
+         (<:a "Indexes")
+         (dolist (index (book-indexes-sorted *book*))
+           (<:div :class "contents-heading-1"
+                  (<:a :href (strcat "index/" (label-prefix (make-instance index)) ".html")
+                       (<:as-html (pretty-label-prefix (make-instance index)))
+                       " Index"))))))))
+
+(defun generate-index (generator book index-class)
+  (declare (ignore generator))
+  (<qbook-page :title (strcat (pretty-label-prefix (make-instance index-class))
+                              " Index")
+               :file-name (strcat "index/" (label-prefix (make-instance index-class)) ".html")
+               :stylesheet "../style.css"
+    (<:h1 (strcat (pretty-label-prefix (make-instance index-class))
+                  " Index"))
+    (<:div :class "contents"
+      (<:dl
+       (dolist (part (sort-parts-with-descriptors (hash-table-values (gethash index-class (indexes book)))))
+         (<:dt (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
+                    (<:as-html (name (descriptor part)))))
+         (when (docstring (descriptor part))
+           (<:dd (<:as-html (docstring (descriptor part)))))))))
+  t)
 
 (defun generate-section (section generator)
   (<qbook-page :title (title generator)
@@ -73,16 +102,24 @@
                    ".html")
       "#"))
 
-(defun make-anchor-name (text)
+(defmethod make-anchor-name ((text string))
   (regex-replace-all "[^A-Za-z.-]" text
                      (lambda (target-string start end match-start match-end reg-starts reg-ends)
                        (declare (ignore start end match-end reg-starts reg-ends))
                        (format nil "_~4,'0X" (char-code (aref target-string match-start))))))
 
+(defmethod make-anchor-name ((descriptor descriptor))
+  (make-anchor-name (strcat (label-prefix descriptor)
+                            "_"
+                            (package-name (symbol-package (name descriptor)))
+                            "::"
+                            (symbol-name (name descriptor)))))
+
 (defun publish (parts)
   (iterate
     (with state = nil)
     (for p in parts)
+    (setf (output-file p) (strcat (make-anchor-name (text (first parts))) ".html"))
     (etypecase p
       (comment-part (setf state (write-comment p state)))
       (whitespace-part (setf state nil) (<:as-html (text p)))
@@ -121,7 +158,8 @@
 
 (defmethod write-code-descriptor :around ((descriptor descriptor) part)
   (<:div :class (label-prefix descriptor)
-    (<:a :href (make-anchor-link descriptor)
+    (<:a :name (make-anchor-name descriptor)
+         :href (make-anchor-link descriptor)
       (<:p (<:as-html (pretty-label-prefix descriptor) " " (name descriptor))))
     (when (docstring descriptor)
       (let ((doc-snippet (docstring descriptor)))
@@ -129,17 +167,19 @@
           (setf doc-snippet (strcat (subseq doc-snippet 0 80) " [continues] ")))
         (<:blockquote (<:as-html doc-snippet)))))
   (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (name descriptor))
-               :file-name (ensure-directories-exist (make-anchor-link descriptor))
+               :file-name (make-anchor-link descriptor)
                :stylesheet "../../../style.css"
     (<:h1 (pretty-label-prefix descriptor) " " (<:as-html (name descriptor)))
     (<:div :class "contents"
-           (when (docstring descriptor)
-             (<:h2 "Documentation")
-             (<:blockquote
-              (<:as-html (docstring descriptor))))
-           (call-next-method)
-           (<:h2 "Source")
-           (<:pre :class "code" (<:as-html (text part))))))
+      (when (docstring descriptor)
+        (<:h2 "Documentation")
+        (<:blockquote
+         (<:as-html (docstring descriptor))))
+      (call-next-method)
+      (<:h2 "Source")
+      (<:pre :class "code" (<:as-html (text part)))
+      (<:a :href (strcat "../../../" (output-file part) "#" (make-anchor-name (descriptor part)))
+        "Source Context"))))
 
 (defmethod write-code-descriptor ((descriptor descriptor) part)
   (declare (ignore part))
@@ -156,7 +196,17 @@
        (<:tr
         (<:td (<:as-html (name slot)))
         (<:td (when (docstring slot)
-                (<:as-html (docstring slot)))))))))
+                (<:as-html (docstring slot)))))))
+    (<:h2 "Hierachy")
+    (<:h3 "Precedence List")
+    (<:ul
+    (dolist (class (mopp:class-direct-superclasses (find-class (name descriptor))))
+      (<:li (<:as-html (class-name class)))))
+    (awhen (mopp:class-direct-subclasses (find-class (name descriptor)))
+      (<:h3 "Sub Classes")
+      (<:ul
+       (dolist (sub it)
+         (<:li (<:as-html (class-name sub))))))))
 
 ;;;; ** Writing Comments
 

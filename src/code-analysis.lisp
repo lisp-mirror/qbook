@@ -53,7 +53,7 @@
 (defclass defmacro-descriptor (defun-descriptor)
   ()
   (:default-initargs
-   :label-prefix "function"
+   :label-prefix "macro"
    :pretty-label-prefix "Macro"))
 
 (defcode-info-collector cl:defmacro (name lambda-list &body body)
