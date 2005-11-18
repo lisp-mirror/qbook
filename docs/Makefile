@@ -15,7 +15,7 @@ html:
                                                              :output-directory \"./html/\" \
                                                              :title \"${SYSTEM}\"))" \
 		${EVAL} "${QUIT}"
-	cp *.css html/
+	cp ../src/*.css html/
 
 pdf:
 	mkdir -p pdf/
