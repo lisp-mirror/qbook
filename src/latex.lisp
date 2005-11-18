@@ -1,6 +1,8 @@
-;;;; -*- lisp -*-
+;; -*- lisp -*-
 
 (in-package :it.bese.qbook)
+
+;;;; * The LaTeX Generator
 
 (defclass latex-generator (generator)
   ((output-file :initarg :output-file :accessor output-file)))

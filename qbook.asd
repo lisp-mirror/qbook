@@ -11,7 +11,8 @@
 (defsystem :qbook
   :components ((:static-file "qbook.asd")
                (:module :src
-                :components ((:file "html" :depends-on ("packages" "qbook"))
+                :components ((:file "code-analysis" :depends-on ("packages" "qbook"))
+                             (:file "html" :depends-on ("packages" "qbook"))
 			     (:file "latex" :depends-on ("packages" "qbook"))
 			     (:file "packages")
 			     (:file "publish-op" :depends-on ("packages" "qbook"))
@@ -21,5 +22,11 @@
 ;;;;@include "src/qbook.lisp"
 
 ;;;;@include "src/publish-op.lisp"
+
+;;;;@include "src/code-analysis.lisp"
+
+;;;;@include "src/html.lisp"
+
+;;;;@include "src/latex.lisp"
 
 ;;;;@include "src/packages.lisp"

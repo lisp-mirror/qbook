@@ -1,55 +1,58 @@
-;;;; -*- lisp -*-
+;; -*- lisp -*-
 
 (in-package :it.bese.qbook)
+
+;;;; * The HTML Generator
 
 (defclass html-generator (generator)
   ((output-directory :initarg :output-directory :accessor output-directory)))
 
+(defvar *generator*)
+
 (defmethod generate (book (generator html-generator))
-  (ensure-directories-exist (output-directory generator))
-  (generate-table-of-contents (contents book) generator)
-  (dolist (section (contents book))
-    (generate-section section generator)))
+  (let ((*generator* generator))
+    (ensure-directories-exist (output-directory generator))
+    (generate-table-of-contents (contents book) generator)
+    (dolist (section (contents book))
+      (generate-section section generator))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (yaclml:deftag-macro <qbook-page (&attribute title &body body)
-    `(<:html
-       (<:head
+  (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css") &body body)
+    `(with-output-to-file (*yaclml-stream*
+                           (merge-pathnames ,file-name (output-directory *generator*))
+                          :if-exists :supersede
+                          :if-does-not-exist :create)
+       (<:html
+        (<:head
 	 (<:title (<:as-html ,title))
-	 (<:stylesheet "style.css")
+	 (<:stylesheet ,stylesheet)
 	 (<:link :rel "alternate stylesheet" :href "print.css" :title "Print"))
-       (<:body
-	 (<:div :class "qbook" ,@body)))))
+        (<:body
+	 (<:div :class "qbook" ,@body))))))
 
 (defun generate-table-of-contents (sections generator)
-  (with-output-to-file (*yaclml-stream*
-			(merge-pathnames "index.html" (output-directory generator))                        
-                        :if-exists :supersede
-                        :if-does-not-exist :create)
-    (<qbook-page :title (title generator)
-      (<:h1 :class "title" (<:as-html (title generator)))
-      (<:div :class "contents"
-        (<:ul
-          (dolist (section sections)
-            (dolist (part section)
-              (when (heading-part-p part)
-                (<:div :class (strcat "contents-heading-" (depth part))
-                  (<:a :href (make-anchor-link part)
-                    (<:as-html (text part))))))))))))
+  (<qbook-page :title (title generator)
+               :file-name "index.html"
+    (<:h1 :class "title" (<:as-html (title generator)))
+    (<:div :class "contents"
+      (<:ul
+       (dolist (section sections)
+         (dolist (part section)
+           (when (heading-part-p part)
+             (<:div :class (strcat "contents-heading-" (depth part))
+                    (<:a :href (make-anchor-link part)
+                         (<:as-html (text part)))))))))))
 
 (defun generate-section (section generator)
-  (with-output-to-file
-      (*yaclml-stream* (merge-pathnames (make-pathname :name (make-anchor-name (text (first section)))
-                                                       :type "html")
-                                        (output-directory generator))
-                       :if-does-not-exist :create
-                       :if-exists :supersede)
   (<qbook-page :title (title generator)
+               :file-name (make-pathname :name (make-anchor-name (text (first section)))
+                                         :type "html")
+    (output-directory generator)
     (<:h1 :class "title" (<:as-html (title generator)))
-    (<:div :class "contents")
-    (publish section))))
+    (<:div :class "contents"
+     (publish section))))
 
-(defmethod make-anchor-link ((h heading-part) )
+(defmethod make-anchor-link ((h heading-part))
   (if (= 1 (depth h))
       (strcat (make-anchor-name (text h)) ".html")
       (labels ((find-level-1 (h)
@@ -58,8 +61,23 @@
 		     (find-level-1 (up-part h)))))
 	(strcat (make-anchor-link (find-level-1 h)) "#" (make-anchor-name (text h))))))
 
+(defmethod make-anchor-link ((d descriptor))
+  (if (name d)
+      (concatenate 'string
+                   "api/"
+                   (make-anchor-name (package-name (symbol-package (name d))))
+                   "/"
+                   (label-prefix d)
+                   "/"
+                   (make-anchor-name (string (name d)))
+                   ".html")
+      "#"))
+
 (defun make-anchor-name (text)
-  (regex-replace-all "[^A-Za-z]" text "_"))
+  (regex-replace-all "[^A-Za-z.-]" text
+                     (lambda (target-string start end match-start match-end reg-starts reg-ends)
+                       (declare (ignore start end match-end reg-starts reg-ends))
+                       (format nil "_~4,'0X" (char-code (aref target-string match-start))))))
 
 (defun publish (parts)
   (iterate
@@ -85,16 +103,62 @@
      (setf state nil)
      (write-string "</p>" *yaclml-stream*)
      (terpri *yaclml-stream*)))
+  (write-code-descriptor (descriptor part) part)
+  nil)
+
+(defgeneric write-code-descriptor (descriptor part))
+
+(defmethod write-code-descriptor ((descriptor t) part)
   (let ((text (text part)))
     (setf text (yaclml::escape-as-html text))
     (setf text (regex-replace-all "(\\(|\\))"
-				  text
-				  "<span class=\"paren\">\\1</span>"))
+                                  text
+                                  "<span class=\"paren\">\\1</span>"))
     (setf text (regex-replace "^.*"
-			      text
-			      (strcat "<span class=\"first-line\">\\&</span><span class\"body\">")))    
-    (<:pre :class "code" (<:as-is text) (<:as-is "</span>")))
+                              text
+                              (strcat "<span class=\"first-line\">\\&</span><span class\"body\">")))    
+    (<:pre :class "code" (<:as-is text) (<:as-is "</span>"))))
+
+(defmethod write-code-descriptor :around ((descriptor descriptor) part)
+  (<:div :class (label-prefix descriptor)
+    (<:a :href (make-anchor-link descriptor)
+      (<:p (<:as-html (pretty-label-prefix descriptor) " " (name descriptor))))
+    (when (docstring descriptor)
+      (let ((doc-snippet (docstring descriptor)))
+        (when (< 80 (length doc-snippet))
+          (setf doc-snippet (strcat (subseq doc-snippet 0 80) " [continues] ")))
+        (<:blockquote (<:as-html doc-snippet)))))
+  (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (name descriptor))
+               :file-name (ensure-directories-exist (make-anchor-link descriptor))
+               :stylesheet "../../../style.css"
+    (<:h1 (pretty-label-prefix descriptor) " " (<:as-html (name descriptor)))
+    (<:div :class "contents"
+           (when (docstring descriptor)
+             (<:h2 "Documentation")
+             (<:blockquote
+              (<:as-html (docstring descriptor))))
+           (call-next-method)
+           (<:h2 "Source")
+           (<:pre :class "code" (<:as-html (text part))))))
+
+(defmethod write-code-descriptor ((descriptor descriptor) part)
+  (declare (ignore part))
   nil)
+
+(defmethod write-code-descriptor ((descriptor defclass-descriptor) part)
+  (declare (ignore part))
+  (when (slots descriptor)
+    (<:h2 "Slots")
+    (<:table
+     (<:tr (<:th "Slot Name")
+           (<:th "Documentation"))
+     (dolist (slot (slots descriptor))
+       (<:tr
+        (<:td (<:as-html (name slot)))
+        (<:td (when (docstring slot)
+                (<:as-html (docstring slot)))))))))
+
+;;;; ** Writing Comments
 
 (defun write-comment (part state)
   (etypecase part

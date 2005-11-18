@@ -25,8 +25,10 @@
 (defgeneric generate (book generator))
 
 (defclass book ()
-  ((title :accessor title :initarg :title)
-   (contents :accessor contents :initarg :contents)))
+  ((title :accessor title :initarg :title
+          :documentation "The title of the book.")
+   (contents :accessor contents :initarg :contents)
+   (indexes :accessor indexes :initarg :indexes :initform '())))
 
 (defun publish-qbook (file-name generator)
   "Convert FILE-NAME into a qbook html file named OUTPUT-FILE with title TITLE."
@@ -43,8 +45,9 @@
       (iterate
         (for section on sections)
         (setf (car section) (nreverse (car section))))
-      (generate (make-instance 'book :title (title generator)
-                                     :contents (nreverse sections))
+      (generate (make-instance 'book
+                               :title (title generator)
+                               :contents (nreverse sections))
                 generator))))
 
 ;;;; ** Publishing internals
@@ -63,7 +66,8 @@
    (origin-file :accessor origin-file :initform nil :initarg :origin-file)))
 
 (defclass code-part (source-file-part)
-  ((form :accessor form :initform nil :initarg :form)))
+  ((form :accessor form :initform nil :initarg :form)
+   (descriptor :accessor descriptor :initform nil :initarg :descriptor)))
 
 (defclass comment-part (source-file-part)
   ())
@@ -150,6 +154,8 @@
 ;;;; There is none. You simply can't create tables or produce links or
 ;;;; bold text. Patches welcome.
 
+;;;; *** The source code reader
+
 (defun make-part-reader (function type)
   (lambda (stream echar)
     (let ((part (make-instance type)))
@@ -194,40 +200,69 @@
     (appending (process-directive part))))
 
 (defun read-source-file (file-name)
-  (let* ((*readtable* (make-qbook-readtable))
-	 (*source-file* file-name)
-	 (parts (with-input-from-file (stream file-name)
-		  (iterate
-		    (for part in-stream stream using #'read)
-		    (collect part)
-		    (when (whitespacep (peek-char nil stream nil nil))
-		      (collect (read-whitespace stream)))))))
-    (declare (special *source-file*))
-    (with-input-from-file (stream file-name)
-      (let ((buffer nil))
-	(dolist (part parts)
-	  (file-position stream (1- (start-position part)))
-	  (setf buffer (make-array (1+ (- (end-position part) (start-position part)))
-				   :element-type 'character))
-	  (read-sequence buffer stream)
-	  (setf (text part) buffer
-		(origin-file part) file-name))))    
-    (setf parts (post-process parts)
-	  parts (process-directives parts)
-	  parts (post-process-navigation parts))
-    ;; remove all the parts before the first comment part
-    (setf parts
-	  (iterate
-	    (for p on parts)
-	    (until (comment-part-p (first p)))
-	    (finally (return p))))
-    parts))
+  (let ((*evaling-readtable* (copy-readtable nil))
+        (*evaling-package* (find-package :common-lisp-user)))
+    (flet ((eval-part (part)
+             (etypecase part
+               (code-part
+                (let* ((*readtable* *evaling-readtable*)
+                       (*package* *evaling-package*)
+                       (*load-pathname* (pathname file-name))
+                       (*load-truename* (truename *load-pathname*)))
+                  (setf (form part) (read-from-string (text part)))
+                  (eval (form part))
+                  (setf *evaling-readtable* *readtable*)
+                  (setf *evaling-package* *package*)))
+               (t part))))
+      (let* ((*readtable* (make-qbook-readtable))
+             (*source-file* file-name)
+             (parts (with-input-from-file (stream file-name)
+                      (iterate
+                        (for part in-stream stream using #'read)
+                        (collect part)
+                        (when (whitespacep (peek-char nil stream nil nil))
+                          (collect (read-whitespace stream)))))))
+        (declare (special *source-file*))
+        (with-input-from-file (stream file-name)
+          (let ((buffer nil))
+            (dolist (part parts)
+              (file-position stream (1- (start-position part)))
+              (setf buffer (make-array (1+ (- (end-position part) (start-position part)))
+                                       :element-type 'character))
+              (read-sequence buffer stream)
+              (setf (text part) buffer
+                    (origin-file part) file-name)
+              (eval-part part))))
+        ;; step 1: post process (merge sequential comments, setup headers, etc.)
+        (setf parts (post-process parts))
+        ;; step 2: handle any directives.
+        (setf parts (process-directives parts))
+        ;; step 3: gather any extra source code info
+        (setf parts (collect-code-info parts))
+        ;; step 4: setup navigation elements
+        (setf parts (post-process-navigation parts))    
+        ;; step 5: remove all the parts before the first comment part
+        (setf parts (iterate
+                      (for p on parts)
+                      (until (comment-part-p (first p)))
+                      (finally (return p))))
+        ;; done!
+        parts))))
 
 (defun heading-text-p (text)
   (scan "^;;;;\\s*\\*+" text))
 
 (defun real-comment-p (text)
   (scan "^;;;;" text))
+
+(defun collect-code-info (parts)
+  (mapcar (lambda (part)
+            (typecase part
+              (code-part
+                ;; punt all the work to collect-code-info
+                (analyse-code-part part))
+              (t part)))
+          parts))
 
 (defun post-process (parts)
   ;; convert all the comments which are acutally headings to heading
