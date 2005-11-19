@@ -99,6 +99,12 @@
    (origin-file :accessor origin-file :initform nil :initarg :origin-file)
    (output-file :accessor output-file :initform nil)))
 
+(defmethod print-object ((part source-file-part) stream)
+  (print-unreadable-object (part stream :type t :identity t)
+    (format stream "~S" (if (< (length (text part)) 10)
+                            (text part)
+                            (strcat (subseq (text part) 0 10) "...")))))
+
 (defclass code-part (source-file-part)
   ((form :accessor form :initform nil :initarg :form)
    (descriptor :accessor descriptor :initform nil :initarg :descriptor)))
@@ -130,6 +136,9 @@
 
 (defclass whitespace-part (source-file-part)
   ())
+
+(defmethod print-object ((part whitespace-part) stream)
+  (print-unreadable-object (part stream :type t :identity t)))
 
 ;;;; *** The publishing engine
 
