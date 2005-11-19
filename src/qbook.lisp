@@ -211,6 +211,17 @@
       (setf (end-position part) (file-position stream))
       part)))
 
+(defun qbook-semicolon-reader (stream char)
+  (declare (ignore char))
+  (with-output-to-string (line)
+    (loop
+       for next-char = (read-char stream nil stream t)
+       if (or (eq next-char stream)
+              (char= next-char #\Newline))
+         do (return)
+       else
+         do (write-char next-char line))))
+
 (defun make-qbook-readtable ()
   (iterate
     (with r = (copy-readtable nil))
@@ -221,7 +232,7 @@
 	  (get-macro-character char *readtable*)
 	(set-macro-character char
 			     (case char
-			       (#\; (make-part-reader function 'comment-part))
+			       (#\; (make-part-reader 'qbook-semicolon-reader 'comment-part))
 			       (#\( (make-part-reader function 'code-part))
 			       (t (make-part-reader function 'code-part)))
 			     non-terminating-p
