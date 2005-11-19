@@ -14,7 +14,16 @@
 (defmethod generate (book (generator html-generator))
   (let ((*generator* generator)
         (*book* book))
-    (ensure-directories-exist (merge-pathnames (output-directory generator)))
+    (let ((output-dir-truename (ensure-directories-exist
+                                (merge-pathnames (output-directory generator)))))
+      (write-string-to-file *print.css* (make-pathname :name "print" :type "css"
+                                                       :defaults output-dir-truename)
+                            :if-does-not-exist :create
+                            :if-exists :supersede)
+      (write-string-to-file *style.css* (make-pathname :name "style" :type "css"
+                                                       :defaults output-dir-truename)
+                            :if-does-not-exist :create
+                            :if-exists :supersede))
     (generate-table-of-contents (contents book) generator)
     (dolist (section (contents book))
       (generate-section section generator))
