@@ -14,7 +14,7 @@
 (defmethod generate (book (generator html-generator))
   (let ((*generator* generator)
         (*book* book))
-    (ensure-directories-exist (output-directory generator))
+    (ensure-directories-exist (merge-pathnames (output-directory generator)))
     (generate-table-of-contents (contents book) generator)
     (dolist (section (contents book))
       (generate-section section generator))
@@ -24,7 +24,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css") &body body)
     `(with-output-to-file (*yaclml-stream*
-                           (merge-pathnames ,file-name (output-directory *generator*))
+                           (ensure-directories-exist (merge-pathnames ,file-name (output-directory *generator*)))
                           :if-exists :supersede
                           :if-does-not-exist :create)
        (<:html
