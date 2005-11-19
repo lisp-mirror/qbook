@@ -37,8 +37,12 @@
                (pretty-label-prefix (make-instance descriptor-class)))))
 
 (defun compare-descriptor-names (a b)
-  (string< (regex-replace-all "[^A-Za-z]" (string (name a)) "")
-           (regex-replace-all "[^A-Za-z]" (string (name b)) "")))
+  (string< (regex-replace-all "[^A-Za-z]" (string (if (symbolp (name a))
+                                                      (name a)
+                                                      (second (name a)))) "")
+           (regex-replace-all "[^A-Za-z]" (string (if (symbolp (name b))
+                                                      (name b)
+                                                      (second (name b)))) "")))
 
 (defun sort-descriptors (descriptors)
   (sort (copy-list descriptors) 'compare-descriptor-names))
@@ -243,7 +247,7 @@
                        (*package* *evaling-package*)
                        (*load-pathname* (pathname file-name))
                        (*load-truename* (truename *load-pathname*)))
-                  (setf (form part) (read-from-string (text part)))
+                  (setf (form part) (read-from-string (text part) nil))
                   (eval (form part))
                   (setf *evaling-readtable* *readtable*)
                   (setf *evaling-package* *package*)))

@@ -94,11 +94,17 @@
   (if (name d)
       (concatenate 'string
                    "api/"
-                   (make-anchor-name (package-name (symbol-package (name d))))
+                   (make-anchor-name (package-name (symbol-package (if (symbolp (name d))
+                                                                       (name d)
+                                                                       (second (name d))))))
                    "/"
                    (label-prefix d)
                    "/"
-                   (make-anchor-name (string (name d)))
+                   (make-anchor-name (if (symbolp (name d))
+                                         (symbol-name (name d))
+                                         (format nil "(~A ~A)"
+                                                 (string (first (name d)))
+                                                 (string (second (name d))))))
                    ".html")
       "#"))
 
@@ -111,9 +117,15 @@
 (defmethod make-anchor-name ((descriptor descriptor))
   (make-anchor-name (strcat (label-prefix descriptor)
                             "_"
-                            (package-name (symbol-package (name descriptor)))
+                            (package-name (symbol-package (if (symbolp (name descriptor))
+                                                              (name descriptor)
+                                                              (second (name descriptor)))))
                             "::"
-                            (symbol-name (name descriptor)))))
+                            (if (symbolp (name descriptor))
+                                (symbol-name (name descriptor))
+                                (format nil "(~A ~A)"
+                                        (symbol-name (first (name descriptor)))
+                                        (symbol-name (second (name descriptor))))))))
 
 (defun publish (parts)
   (iterate
