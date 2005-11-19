@@ -4,12 +4,12 @@
 
 ;;;; * Extra Code Analysis
 
+(defvar *code-info-collectors* (make-hash-table :test 'eql))
+
 (defun analyse-code-part (code-part)
   (awhen (gethash (first (form code-part)) *code-info-collectors*)
     (setf (descriptor code-part) (funcall it (cdr (form code-part)))))
   code-part)
-
-(defvar *code-info-collectors* (make-hash-table :test 'eql))
 
 (defmacro defcode-info-collector (operator args &body body)
   (with-unique-names (form)
