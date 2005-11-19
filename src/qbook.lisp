@@ -276,7 +276,7 @@
              (*source-file* file-name)
              (parts (with-input-from-file (stream file-name)
                       (iterate
-                        (for part in-stream stream using #'read)
+                        (for part in-stream stream using #'read-preserving-whitespace)
                         (collect part)
                         (when (whitespacep (peek-char nil stream nil nil))
                           (collect (read-whitespace stream)))))))
