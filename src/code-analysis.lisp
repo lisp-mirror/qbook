@@ -122,3 +122,33 @@
   (make-instance 'defparameter-descriptor
                  :name name
                  :docstring documentation))
+
+(defclass defmethod-descriptor (defun-descriptor)
+  ((qualifier :accessor qualifier :initform nil :initarg :qualifier))
+  (:default-initargs
+   :label-prefix "method"
+   :pretty-label-prefix "Method"))
+
+(defcode-info-collector cl:defmethod (name &rest args)
+  (let ((qualifier nil)
+        arguments
+        body)
+    (when (symbolp (first args))
+      (setf qualifier (pop args)))
+    (setf arguments (pop args)
+          body args)
+    (multiple-value-bind (lambda-list env)
+        (arnesi::walk-lambda-list arguments nil nil :allow-specializers t)
+      (multiple-value-bind (body docstring declarations)
+          (handler-bind ((arnesi::return-from-unknown-block
+                          (lambda (c)
+                            (declare (ignore c))
+                            (invoke-restart 'arnesi::add-block))))
+            (arnesi::walk-implict-progn nil body env :docstring t :declare t))
+        (declare (ignore declarations))
+        (make-instance 'defmethod-descriptor
+                       :name name
+                       :qualifier qualifier
+                       :lambda-list lambda-list
+                       :body body
+                       :docstring docstring)))))

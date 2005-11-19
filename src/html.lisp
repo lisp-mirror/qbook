@@ -70,15 +70,16 @@
                               " Index")
                :file-name (strcat "index/" (label-prefix (make-instance index-class)) ".html")
                :stylesheet "../style.css"
-    (<:h1 (strcat (pretty-label-prefix (make-instance index-class))
-                  " Index"))
-    (<:div :class "contents"
-      (<:dl
-       (dolist (part (sort-parts-with-descriptors (hash-table-values (gethash index-class (indexes book)))))
-         (<:dt (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
-                    (<:as-html (name (descriptor part)))))
-         (when (docstring (descriptor part))
-           (<:dd (<:as-html (docstring (descriptor part)))))))))
+    (<:div :class "api-index"
+      (<:h1 (<:as-html (strcat (pretty-label-prefix (make-instance index-class))
+                               " Index")))
+      (<:div :class "contents"
+        (<:dl
+         (dolist (part (sort-parts-with-descriptors (hash-table-values (gethash index-class (indexes book)))))
+           (<:dt (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
+                      (<:as-html (name (descriptor part)))))
+           (when (docstring (descriptor part))
+             (<:dd (<:as-html (docstring (descriptor part))))))))))
   t)
 
 (defun generate-section (section generator)
@@ -101,20 +102,7 @@
 
 (defmethod make-anchor-link ((d descriptor))
   (if (name d)
-      (concatenate 'string
-                   "api/"
-                   (make-anchor-name (package-name (symbol-package (if (symbolp (name d))
-                                                                       (name d)
-                                                                       (second (name d))))))
-                   "/"
-                   (label-prefix d)
-                   "/"
-                   (make-anchor-name (if (symbolp (name d))
-                                         (symbol-name (name d))
-                                         (format nil "(~A ~A)"
-                                                 (string (first (name d)))
-                                                 (string (second (name d))))))
-                   ".html")
+      (concatenate 'string "api/" (make-anchor-name d) ".html")
       "#"))
 
 (defmethod make-anchor-name ((text string))
@@ -123,18 +111,42 @@
                        (declare (ignore start end match-end reg-starts reg-ends))
                        (format nil "_~4,'0X" (char-code (aref target-string match-start))))))
 
+(defun effective-name (function-name)
+  (if (symbolp function-name)
+      function-name
+      (second function-name)))
+
 (defmethod make-anchor-name ((descriptor descriptor))
   (make-anchor-name (strcat (label-prefix descriptor)
                             "_"
-                            (package-name (symbol-package (if (symbolp (name descriptor))
-                                                              (name descriptor)
-                                                              (second (name descriptor)))))
+                            (package-name (symbol-package (effective-name (name descriptor))))
                             "::"
                             (if (symbolp (name descriptor))
                                 (symbol-name (name descriptor))
                                 (format nil "(~A ~A)"
                                         (symbol-name (first (name descriptor)))
                                         (symbol-name (second (name descriptor))))))))
+
+(defmethod make-anchor-name ((method-descriptor defmethod-descriptor))
+  (make-anchor-name (strcat (label-prefix method-descriptor)
+                            "_"
+                            (package-name (symbol-package (effective-name (name method-descriptor))))
+                            "::"
+                            (html-name method-descriptor))))
+
+(defmethod html-name ((descriptor descriptor))
+  (name descriptor))
+
+(defmethod html-name ((descriptor defmethod-descriptor))
+  (format nil "(~A~@[~A~]~{ ~A~})"
+          (effective-name (name descriptor))
+          (qualifier descriptor)
+          (remove-if #'null
+                     (mapcar (lambda (argument)
+                               (typecase argument
+                                 (arnesi::specialized-function-argument-form
+                                  (arnesi::specializer argument))))
+                             (lambda-list descriptor)))))
 
 (defun publish (parts)
   (iterate
@@ -181,26 +193,27 @@
   (<:div :class (label-prefix descriptor)
     (<:a :name (make-anchor-name descriptor)
          :href (make-anchor-link descriptor)
-      (<:p (<:as-html (pretty-label-prefix descriptor) " " (name descriptor))))
+      (<:p (<:as-html (pretty-label-prefix descriptor) " " (html-name descriptor))))
     (when (docstring descriptor)
       (let ((doc-snippet (docstring descriptor)))
         (when (< 80 (length doc-snippet))
           (setf doc-snippet (strcat (subseq doc-snippet 0 80) " [continues] ")))
         (<:blockquote (<:as-html doc-snippet)))))
-  (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (name descriptor))
+  (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (html-name descriptor))
                :file-name (make-anchor-link descriptor)
-               :stylesheet "../../../style.css"
-    (<:h1 (pretty-label-prefix descriptor) " " (<:as-html (name descriptor)))
-    (<:div :class "contents"
-      (when (docstring descriptor)
-        (<:h2 "Documentation")
-        (<:blockquote
-         (<:as-html (docstring descriptor))))
-      (call-next-method)
-      (<:h2 "Source")
-      (<:pre :class "code" (<:as-html (text part)))
-      (<:a :href (strcat "../../../" (output-file part) "#" (make-anchor-name (descriptor part)))
-        "Source Context"))))
+               :stylesheet "../style.css"
+    (<:div :class "computational-element"
+      (<:h1 (<:as-html (pretty-label-prefix descriptor)) ": " (<:as-html (html-name descriptor)))
+      (<:div :class "contents"
+        (when (docstring descriptor)
+          (<:h2 "Documentation")
+          (<:blockquote
+           (<:as-html (docstring descriptor))))
+        (call-next-method)
+        (<:h2 "Source")
+        (<:pre :class "code" (<:as-html (text part)))
+        (<:a :href (strcat "../" (output-file part) "#" (make-anchor-name (descriptor part)))
+          "Source Context")))))
 
 (defmethod write-code-descriptor ((descriptor descriptor) part)
   (declare (ignore part))
