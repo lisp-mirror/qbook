@@ -191,14 +191,14 @@
 
 (defmethod write-code-descriptor :around ((descriptor descriptor) part)
   (<:div :class (label-prefix descriptor)
-    (<:a :name (make-anchor-name descriptor)
-         :href (make-anchor-link descriptor)
-      (<:p (<:as-html (pretty-label-prefix descriptor) " " (html-name descriptor))))
-    (when (docstring descriptor)
-      (let ((doc-snippet (docstring descriptor)))
-        (when (< 80 (length doc-snippet))
-          (setf doc-snippet (strcat (subseq doc-snippet 0 80) " [continues] ")))
-        (<:blockquote (<:as-html doc-snippet)))))
+    (<:p (<:a :name (make-anchor-name descriptor)
+              :href (make-anchor-link descriptor)
+              (<:as-html (pretty-label-prefix descriptor))
+              " "
+              (<:as-html (html-name descriptor)))
+         " "
+         (when-bind first-sentence (docstring-first-sentence descriptor)
+           (<:as-html first-sentence))))
   (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (html-name descriptor))
                :file-name (make-anchor-link descriptor)
                :stylesheet "../style.css"

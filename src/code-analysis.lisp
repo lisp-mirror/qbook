@@ -27,6 +27,27 @@
    (label-prefix :accessor label-prefix :initarg :label-prefix)
    (pretty-label-prefix :accessor pretty-label-prefix :initarg :pretty-label-prefix)))
 
+(defgeneric docstring-first-sentence (descriptor &optional limit)
+  (:documentation "Returns the first sentence of DESCRIPTOR's
+docstring. Returns at most LIMIT characters (if the first
+sentence is longer than LIMIT characters it will be simply
+truncated. If DESCRIPTOR's docstring is NIL this function
+returns nil.")
+  (:method ((descriptor descriptor) &optional (limit 180))
+    (with-output-to-string (first-sentence)
+      (flet ((ret ()
+               (return-from docstring-first-sentence
+                 (get-output-stream-string first-sentence))))
+        (loop
+           for char across (docstring descriptor)
+           for count below limit
+           if (member char (list #\. #\? #\!))
+             do (write-char char first-sentence)
+             and do (ret)
+           else
+             do (write-char char first-sentence)
+           finally (ret))))))
+
 (defclass defun-descriptor (descriptor)
   ((lambda-list :accessor lambda-list :initarg :lambda-list)
    (body :accessor body :initarg :body))
