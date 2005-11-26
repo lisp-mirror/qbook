@@ -157,7 +157,8 @@
 (defmethod process-directive ((part comment-part))
   (declare (special *source-file*))
   (multiple-value-bind (matchp strings)
-      (cl-ppcre:scan-to-strings "^@include (.*)" (text part))
+      (cl-ppcre:scan-to-strings (load-time-value (cl-ppcre:create-scanner "^@include (.*)"))
+                                (text part))
     (if matchp
 	(return-from process-directive (read-source-file
 					(merge-pathnames (let ((*readtable* (copy-readtable nil)))
@@ -331,7 +332,9 @@
 	  (typecase p
 	    (comment-part
 	     (multiple-value-bind (match strings)
-		 (scan-to-strings (create-scanner ";;;;\\s*(\\*+)\\s*(.*)" :single-line-mode nil) (text p))
+		 (scan-to-strings (load-time-value
+                                   (create-scanner ";;;;\\s*(\\*+)\\s*(.*)" :single-line-mode nil))
+                                  (text p))
 	       (if match
 		   (collect (make-instance 'heading-part
 					   :depth (length (aref strings 0))
@@ -340,7 +343,9 @@
 					   :end-position (end-position p)
 					   :origin-file (origin-file p)))
 		   (multiple-value-bind (match strings)
-		       (scan-to-strings (create-scanner ";;;;(.*)" :single-line-mode t) (text p))
+		       (scan-to-strings (load-time-value
+                                         (create-scanner ";;;;(.*)" :single-line-mode t))
+                                        (text p))
 		     (if match
 			 (collect (make-instance 'comment-part
 						 :start-position (start-position p)
