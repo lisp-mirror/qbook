@@ -164,3 +164,14 @@ returns nil.")
                        :lambda-list lambda-list
                        :body body
                        :docstring docstring)))))
+
+(defclass defconstant-descriptor (global-variable-descriptor)
+  ()
+  (:default-initargs
+   :label-prefix "constant"
+   :pretty-label-prefix "Constant"))
+
+(defcode-info-collector cl:defconstant (name value &optional docstring)
+  (declare (ignore value))
+  (make-instance 'defconstant-descriptor
+                 :name name :docstring docstring))
