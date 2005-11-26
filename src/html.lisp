@@ -230,17 +230,17 @@
        (<:tr
         (<:td (<:as-html (name slot)))
         (<:td (when (docstring slot)
-                (<:as-html (docstring slot)))))))
-    (<:h2 "Hierachy")
-    (<:h3 "Precedence List")
+                (<:as-html (docstring slot))))))))
+  (<:h2 "Hierachy")
+  (<:h3 "Precedence List")
+  (<:ul
+   (dolist (class (mopp:class-direct-superclasses (find-class (name descriptor))))
+     (<:li (<:as-html (class-name class)))))
+  (awhen (mopp:class-direct-subclasses (find-class (name descriptor)))
+    (<:h3 "Sub Classes")
     (<:ul
-    (dolist (class (mopp:class-direct-superclasses (find-class (name descriptor))))
-      (<:li (<:as-html (class-name class)))))
-    (awhen (mopp:class-direct-subclasses (find-class (name descriptor)))
-      (<:h3 "Sub Classes")
-      (<:ul
-       (dolist (sub it)
-         (<:li (<:as-html (class-name sub))))))))
+     (dolist (sub it)
+       (<:li (<:as-html (class-name sub)))))))
 
 ;;;; ** Writing Comments
 
