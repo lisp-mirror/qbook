@@ -118,9 +118,6 @@ returns nil.")
                    :docstring (getf options :documentation))))
 
 (defclass global-variable-descriptor (descriptor)
-  ())
-
-(defclass defvar-descriptor (global-variable-descriptor)
   ()
   (:default-initargs
    :label-prefix "variable"
@@ -128,19 +125,13 @@ returns nil.")
 
 (defcode-info-collector cl:defvar (name &optional value documentation)
   (declare (ignore value))
-  (make-instance 'defvar-descriptor
+  (make-instance 'global-variable-descriptor
                  :name name
                  :docstring documentation))
 
-(defclass defparameter-descriptor (global-variable-descriptor)
-  ()
-  (:default-initargs
-   :label-prefix "variable"
-   :pretty-label-prefix "Variable"))
-
 (defcode-info-collector cl:defparameter (name &optional value documentation)
   (declare (ignore value))
-  (make-instance 'defparameter-descriptor
+  (make-instance 'global-variable-descriptor
                  :name name
                  :docstring documentation))
 
