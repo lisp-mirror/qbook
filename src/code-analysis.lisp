@@ -4,7 +4,22 @@
 
 ;;;; * Extra Code Analysis
 
-(defvar *code-info-collectors* (make-hash-table :test 'eql))
+(defvar *code-info-collectors* (make-hash-table))
+
+(defvar *known-elements* (make-hash-table))
+
+(defun register-descriptor (type descriptor)
+  (push (cons (name descriptor) descriptor)
+        (gethash type *known-elements*)))
+
+(defun find-descriptor (type name)
+  (when-bind elements-of-type (gethash type *known-elements*)
+    (cdr (assoc name elements-of-type
+                :test (lambda (a b)
+                        (if (symbolp a)
+                            (eq a b)
+                            (and (eq (first a) (first b))
+                                 (eq (second a) (second b)))))))))
 
 (defun analyse-code-part (code-part)
   (awhen (gethash (first (form code-part)) *code-info-collectors*)
