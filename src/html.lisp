@@ -224,14 +224,11 @@
   (declare (ignore part))
   (when (slots descriptor)
     (<:h2 "Slots")
-    (<:table
-     (<:tr (<:th "Slot Name")
-           (<:th "Documentation"))
+    (<:ul
      (dolist (slot (slots descriptor))
-       (<:tr
-        (<:td (<:as-html (name slot)))
-        (<:td (when (docstring slot)
-                (<:as-html (docstring slot))))))))
+       (<:li (<:as-html (name slot))
+             (when (docstring slot)
+               (<:as-html " - " (docstring slot)))))))
   (<:h2 "Hierachy")
   (<:h3 "Precedence List")
   (<:ul
