@@ -105,7 +105,7 @@ returns nil.")
                  :name name
                  :supers supers
                  :slots (mapcar #'make-slot-descriptor slots)
-                 :docstring (cdr (assoc :documentation options))))
+                 :docstring (second (assoc :documentation options))))
 
 (defclass class-slot-descriptor (descriptor)
   ())
