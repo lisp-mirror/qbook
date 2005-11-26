@@ -212,6 +212,8 @@ div.contents div.contents-heading-5 a:visited { color: #333333; }
 .footer a:link { color: #000000; }
 .footer a:visited { color: #000000; }
 
+div.contents div.computational-element-link { padding-left: 1em; }
+
 .nav-links { font-size: x-small; float: right; margin-top: -2em; }
 "
   "The default stylesheet for qbook generated html documentation.")

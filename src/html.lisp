@@ -190,7 +190,8 @@
     (<:pre :class "code" (<:as-is text) (<:as-is "</span>"))))
 
 (defmethod write-code-descriptor :around ((descriptor descriptor) part)
-  (<:div :class (label-prefix descriptor)
+  (<:div :class (strcat "computational-element-link " 
+                        "computational-element-link-" (label-prefix descriptor))
     (<:p (<:a :name (make-anchor-name descriptor)
               :href (make-anchor-link descriptor)
               (<:as-html (pretty-label-prefix descriptor))
