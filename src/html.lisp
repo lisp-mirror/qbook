@@ -79,7 +79,7 @@
            (<:dt (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
                       (<:as-html (name (descriptor part)))))
            (when (docstring (descriptor part))
-             (<:dd (<:as-html (docstring (descriptor part))))))))))
+             (<:dd (<:as-html (subseq-first-sentence (descriptor part))))))))))
   t)
 
 (defun generate-section (section generator)
