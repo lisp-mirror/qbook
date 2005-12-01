@@ -28,7 +28,8 @@
     (dolist (section (contents book))
       (generate-section section generator))
     (dolist (index-class (book-indexes-sorted book))
-      (generate-index generator book index-class))))
+      (generate-index generator book index-class))
+    (generate-permuted-index generator book)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css") &body body)
@@ -47,22 +48,23 @@
 (defun generate-table-of-contents (sections generator)
   (<qbook-page :title (title generator)
                :file-name "index.html"
-    (<:h1 :class "title" (<:as-html (title generator)))
-    (<:div :class "contents"
-      (<:ul
-       (dolist (section sections)
-         (dolist (part section)
-           (when (heading-part-p part)
-             (<:div :class (strcat "contents-heading-" (depth part))
-                    (<:a :href (make-anchor-link part)
-                         (<:as-html (text part)))))))
-       (<:div :class "contents-heading-1"
-         (<:a "Indexes")
-         (dolist (index (book-indexes-sorted *book*))
-           (<:div :class "contents-heading-1"
-                  (<:a :href (strcat "index/" (label-prefix (make-instance index)) ".html")
-                       (<:as-html (pretty-label-prefix (make-instance index)))
-                       " Index"))))))))
+     (<:div :class "contents"
+            (<:h1 :class "title" (<:as-html (title generator)))
+            (<:h2 "Table of Contents")
+            (dolist (section sections)
+              (dolist (part section)
+                (when (heading-part-p part)
+                  (<:div :class (strcat "contents-heading-" (depth part))
+                         (<:a :href (make-anchor-link part)
+                              (<:as-html (text part)))))))
+            (<:h2 "Indexes")
+            (dolist (index (book-indexes-sorted *book*))
+              (<:div :class "contents-heading-1"
+                     (<:a :href (strcat "index/" (label-prefix (make-instance index)) ".html")
+                          (<:as-html (pretty-label-prefix (make-instance index)))
+                          " Index")))
+            (<:div :class "contents-heading-1"
+                   (<:a :href "index/permutated.html" "Permuted Symbol Index")))))
 
 (defun generate-index (generator book index-class)
   (declare (ignore generator))
@@ -79,8 +81,27 @@
            (<:dt (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
                       (<:as-html (name (descriptor part)))))
            (when (docstring (descriptor part))
-             (<:dd (<:as-html (subseq-first-sentence (descriptor part))))))))))
+             (<:dd (<:as-html (docstring-first-sentence (descriptor part))))))))))
   t)
+
+(defun generate-permuted-index (generator book)
+  (declare (ignore generator))
+  (<qbook-page :title "Permuted Index"
+               :file-name "index/permutated.html"
+               :stylesheet "../style.css"
+               (<:div :class "api-index"
+                      (<:h1 (<:as-html "Permuted Index"))
+                      (<:div :class "contents"
+                             (<:table :class "permuted-index-table"
+                              (dolist* ((prefix suffix part) (permutated-global-index book))
+                                (<:tr
+                                 (<:td :align "right"
+                                       (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
+                                            (<:as-html prefix)))
+                                 (<:td (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
+                                            (<:as-html suffix)))
+                                 (<:td (<:a :href (strcat "../" (make-anchor-link (descriptor part)))
+                                            " [" (<:as-html (pretty-label-prefix (descriptor part))) "] ")))))))))
 
 (defun generate-section (section generator)
   (<qbook-page :title (title generator)
@@ -138,7 +159,7 @@
   (name descriptor))
 
 (defmethod html-name ((descriptor defmethod-descriptor))
-  (format nil "(~A~@[~A~]~{ ~A~})"
+  (format nil "(~A~@[ ~A~]~{ ~A~})"
           (effective-name (name descriptor))
           (qualifier descriptor)
           (remove-if #'null
@@ -231,14 +252,19 @@
                (<:as-html " - " (docstring slot)))))))
   (<:h2 "Hierachy")
   (<:h3 "Precedence List")
-  (<:ul
-   (dolist (class (mopp:class-direct-superclasses (find-class (name descriptor))))
-     (<:li (<:as-html (class-name class)))))
-  (awhen (mopp:class-direct-subclasses (find-class (name descriptor)))
-    (<:h3 "Sub Classes")
+  (flet ((make-class-link (class)
+           (aif (find-descriptor "class" (class-name class))
+                (<:a :href (strcat "../" (make-anchor-link it))
+                     (<:as-html (class-name class)))
+                (<:as-html (class-name class)))))
     (<:ul
-     (dolist (sub it)
-       (<:li (<:as-html (class-name sub)))))))
+     (dolist (class (mopp:class-direct-superclasses (find-class (name descriptor))))
+       (<:li (make-class-link class))))
+    (awhen (mopp:class-direct-subclasses (find-class (name descriptor)))
+      (<:h3 "Sub Classes")
+      (<:ul
+       (dolist (sub it)
+         (<:li (make-class-link sub)))))))
 
 ;;;; ** Writing Comments
 

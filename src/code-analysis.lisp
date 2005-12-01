@@ -6,14 +6,14 @@
 
 (defvar *code-info-collectors* (make-hash-table))
 
-(defvar *known-elements* (make-hash-table))
+(defvar *known-elements* (make-hash-table :test #'equal))
 
-(defun register-descriptor (type descriptor)
+(defun register-descriptor (descriptor)
   (push (cons (name descriptor) descriptor)
-        (gethash type *known-elements*)))
+        (gethash (label-prefix descriptor) *known-elements*)))
 
-(defun find-descriptor (type name)
-  (when-bind elements-of-type (gethash type *known-elements*)
+(defun find-descriptor (label name)
+  (when-bind elements-of-type (gethash label *known-elements*)
     (cdr (assoc name elements-of-type
                 :test (lambda (a b)
                         (if (symbolp a)
@@ -23,7 +23,8 @@
 
 (defun analyse-code-part (code-part)
   (awhen (gethash (first (form code-part)) *code-info-collectors*)
-    (setf (descriptor code-part) (funcall it (cdr (form code-part)))))
+    (setf (descriptor code-part) (funcall it (cdr (form code-part))))
+    (register-descriptor (descriptor code-part)))
   code-part)
 
 (defmacro defcode-info-collector (operator args &body body)

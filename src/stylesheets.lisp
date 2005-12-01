@@ -110,6 +110,7 @@ div.contents div.contents-heading-5 a:visited { color: #333333; }
   background-color: #FFFFFF;
   padding: 0px; 
   margin: 0px;
+  font-family: verdana;
 }
 
 .qbook { 
@@ -119,20 +120,18 @@ div.contents div.contents-heading-5 a:visited { color: #333333; }
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: verdana;
+  color: #990000;
 }
 
 h1 { 
   text-align: center; 
-  color: #000000; 
   padding: 0px;
   margin: 0px;
 }
 
 h2 { 
   text-align: center;
-  border-top: 1px solid #000000; 
-  border-bottom: 1px solid #000000; 
+  border-bottom: 5px solid #CC0000; 
   margin-top: 2em;
 }
 
@@ -142,20 +141,11 @@ h3, h4, h5, h6 {
 }
 
 h3 { 
-  border-top: 1px solid #000000; 
-  border-bottom: 1px solid #000000; 
+  border-bottom: 2px solid #CC0000; 
 }
 
-h4 { 
-  border-bottom: 1px solid #000000; 
-}
-
-h5 { 
-  border-bottom: 1px solid #000000; 
-}
-
-h6 { 
-  border-bottom: 1px solid #000000; 
+h4, h5, h6 { 
+  border-bottom: 1px solid #CC0000; 
 }
 
 pre.code {
@@ -166,10 +156,6 @@ pre.code {
 
 pre.code * .paren { color: #666666; } 
 
-pre.code a:active  { color: #000000; }
-pre.code a:link    { color: #000000; }
-pre.code a:visited { color: #000000; }
-
 pre.code .first-line { font-weight: bold; }
 
 pre.code .body, pre.code * .body { display: none; }
@@ -178,9 +164,9 @@ div.contents {
   font-family: verdana; 
 }
 
-div.contents a:active  { color: #000000; }
-div.contents a:link    { color: #000000; }
-div.contents a:visited { color: #000000; }
+a:active  { color: #0000AA; }
+a:link    { color: #0000AA; }
+a:visited { color: #0000AA; }
 
 div.contents div.contents-heading-1 { padding-left: 0.5em; font-weight: bold; }
 div.contents div.contents-heading-1 a:active  { color: #333333; }
@@ -215,5 +201,14 @@ div.contents div.contents-heading-5 a:visited { color: #333333; }
 div.contents div.computational-element-link { padding-left: 1em; }
 
 .nav-links { font-size: x-small; float: right; margin-top: -2em; }
+
+table.permuted-index-table {
+  border-spacing: 0px;
+}
+
+table.permuted-index-table tr td {
+  font-size: x-small;
+  padding: 0px;
+}
 "
   "The default stylesheet for qbook generated html documentation.")

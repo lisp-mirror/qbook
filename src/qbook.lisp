@@ -36,6 +36,26 @@
         :key (lambda (descriptor-class)
                (pretty-label-prefix (make-instance descriptor-class)))))
 
+(defmethod all-code-parts ((book book))
+  (loop
+     for section in (contents book)
+     append (remove-if-not #'code-part-p section)))
+
+(defmethod permutated-global-index ((book book))
+  (let ((entries '()))
+    (dolist (part (all-code-parts book))
+      (when (descriptor part)
+        (let ((name-string (symbol-name (effective-name (name (descriptor part))))))
+          (dolist (name-part (remove-duplicates
+                              (remove-if (lambda (string)
+                                           (string= "" string))
+                                         (cl-ppcre:split "[^a-zA-Z]" name-string))
+                              :test #'string=))
+            (let ((offset (search name-part name-string :test #'char=)))
+              (push (list (subseq name-string 0 offset) (subseq name-string offset) part)
+                    entries))))))
+    (sort entries #'string< :key #'second)))
+
 (defun compare-descriptor-names (a b)
   (string< (regex-replace-all "[^A-Za-z]" (string (if (symbolp (name a))
                                                       (name a)
@@ -51,37 +71,44 @@
   (sort (remove-if #'null parts :key #'descriptor)
         'compare-descriptor-names :key #'descriptor))
 
+(defun convert-to-sections (file-name parts)
+  (let ((sections '()))
+    (iterate
+      (for p in parts)
+      (if (and (heading-part-p p)
+               (= 1 (depth p)))
+          (push (list p) sections)
+          (if (consp sections)
+              (push p (car sections))
+              (error "No initial heading in ~S." file-name))))
+    (iterate
+      (for section on sections)
+      (setf (car section) (nreverse (car section))))
+    (nreverse sections)))
+
+(defun bulid-indexes (book)
+  (loop
+     for section in (contents book)
+     do (loop
+           for part in section
+           when (code-part-p part)
+           do (when (descriptor part)
+                (symbol-macrolet ((index-table
+                                   (gethash (class-of (descriptor part)) (indexes book))))
+                  (unless index-table
+                    (setf index-table (make-hash-table :test 'eql)))
+                  (setf (gethash (name (descriptor part)) index-table) part)))))
+  book)
+
 (defun publish-qbook (file-name generator)
   "Convert FILE-NAME into a qbook html file named OUTPUT-FILE with title TITLE."
-  (let ((parts (read-source-file file-name)))
-    (let ((sections '()))
-      (iterate
-	(for p in parts)
-	(if (and (heading-part-p p)
-		 (= 1 (depth p)))
-	    (push (list p) sections)
-	    (if (consp sections)
-		(push p (car sections))
-		(error "No initial heading in ~S." file-name))))
-      (iterate
-        (for section on sections)
-        (setf (car section) (nreverse (car section))))
-      ;; build up the function indexes
-      (let ((book (make-instance 'book
-                                 :title (title generator)
-                                 :contents (nreverse sections))))
-        (loop
-           for section in (contents book)
-           do (loop
-                 for part in section
-                 when (code-part-p part)
-                   do (when (descriptor part)
-                        (symbol-macrolet ((index-table
-                                           (gethash (class-of (descriptor part)) (indexes book))))
-                          (unless index-table
-                            (setf index-table (make-hash-table :test 'eql)))
-                          (setf (gethash (name (descriptor part)) index-table) part)))))
-        (generate book generator)))))
+  (let ((book (make-instance 'book
+                             :title (title generator)
+                             :contents (convert-to-sections
+                                        file-name
+                                        (read-source-file file-name)))))
+    (bulid-indexes book)
+    (generate book generator)))
 
 ;;;; ** Publishing internals
 
