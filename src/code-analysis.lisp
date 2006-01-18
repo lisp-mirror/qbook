@@ -154,6 +154,21 @@ returns nil.")
                  :name name
                  :docstring documentation))
 
+(defclass defgeneric-descriptor (defun-descriptor)
+  ()
+  (:default-initargs
+   :label-prefix "generic function"
+   :pretty-label-prefix "Generic Function"))
+
+(defcode-info-collector cl:defgeneric (name arg-list &rest options)
+  (multiple-value-bind (lambda-list env)
+      (arnesi::walk-lambda-list arg-list nil nil :allow-specializers nil)
+    (declare (ignore env))
+    (make-instance 'defgeneric-descriptor
+                   :name name
+                   :lambda-list lambda-list
+                   :docstring (second (assoc :documentation options)))))
+
 (defclass defmethod-descriptor (defun-descriptor)
   ((qualifier :accessor qualifier :initform nil :initarg :qualifier))
   (:default-initargs
