@@ -52,10 +52,10 @@
          for char across string
          for count below limit
          if (member char (list #\. #\? #\!))
-         do (write-char char first-sentence)
-         and do (ret)
+           do (write-char char first-sentence)
+           and do (ret)
          else
-         do (write-char char first-sentence)
+           do (write-char char first-sentence)
          finally (ret)))))
 
 (defgeneric docstring-first-sentence (descriptor &optional limit)
