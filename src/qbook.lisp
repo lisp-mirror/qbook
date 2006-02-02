@@ -304,8 +304,9 @@
                        (*package* *evaling-package*)
                        (*load-pathname* (pathname file-name))
                        (*load-truename* (truename *load-pathname*)))
-                  (setf (form part) (read-from-string (text part) nil))
-                  (eval (form part))
+                  (ignore-errors
+                    (setf (form part) (read-from-string (text part) nil))
+                    (eval (form part)))
                   (setf *evaling-readtable* *readtable*)
                   (setf *evaling-package* *package*)))
                (t part))))
