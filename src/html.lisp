@@ -164,7 +164,7 @@
 
 (defmethod html-name ((descriptor defmethod-descriptor))
   (format nil "(~A~@[ ~A~]~{ ~A~})"
-          (effective-name (name descriptor))
+          (name descriptor)
           (qualifier descriptor)
           (remove-if #'null
                      (mapcar (lambda (argument)
