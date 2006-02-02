@@ -32,7 +32,9 @@
     (generate-permuted-index generator book)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css") &body body)
+  (yaclml:deftag-macro <qbook-page (&attribute title file-name (stylesheet "style.css")
+                                               (printsheet "print.css")
+                                    &body body)
     `(with-output-to-file (*yaclml-stream*
                            (ensure-directories-exist (merge-pathnames ,file-name (output-directory *generator*)))
                           :if-exists :supersede
@@ -41,7 +43,7 @@
         (<:head
 	 (<:title (<:as-html ,title))
 	 (<:stylesheet ,stylesheet)
-	 (<:link :rel "alternate stylesheet" :href "print.css" :title "Print"))
+	 (<:link :rel "alternate stylesheet" :href ,printsheet :title "Print"))
         (<:body
 	 (<:div :class "qbook" ,@body))))))
 
@@ -72,6 +74,7 @@
                               " Index")
                :file-name (strcat "index/" (label-prefix (make-instance index-class)) ".html")
                :stylesheet "../style.css"
+               :printsheet "../print.css"
     (<:div :class "api-index"
       (<:h1 (<:as-html (strcat (pretty-label-prefix (make-instance index-class))
                                " Index")))
@@ -89,6 +92,7 @@
   (<qbook-page :title "Permuted Index"
                :file-name "index/permutated.html"
                :stylesheet "../style.css"
+               :printsheet "../print.css"
                (<:div :class "api-index"
                       (<:h1 (<:as-html "Permuted Index"))
                       (<:div :class "contents"
@@ -224,6 +228,7 @@
   (<qbook-page :title (strcat (pretty-label-prefix descriptor) " " (html-name descriptor))
                :file-name (make-anchor-link descriptor)
                :stylesheet "../style.css"
+               :printsheet "../print.css"
     (<:div :class "computational-element"
       (<:h1 (<:as-html (pretty-label-prefix descriptor)) ": " (<:as-html (html-name descriptor)))
       (<:div :class "contents"
