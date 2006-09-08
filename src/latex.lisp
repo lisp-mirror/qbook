@@ -5,7 +5,9 @@
 ;;;; * The LaTeX Generator
 
 (defclass latex-generator (generator)
-  ((output-file :initarg :output-file :accessor output-file)))
+  ((output-file :initarg :output-file :accessor output-file)
+   (listings :initarg :listings :accessor listings :initform nil
+                 :documentation "When non-NIL, generate listings with LaTeX listings package.  When string, push \\ltset{this string} in the preamble.")))
 
 (defvar *latex-stream*)
 
@@ -19,7 +21,7 @@
     (write-string "}" *latex-stream*))
   (terpri *latex-stream*))
 
-(defgeneric generate-part (part))
+(defgeneric generate-part (part generator))
 
 (defmethod generate (book (generator latex-generator))
   (with-output-to-file (*latex-stream* (output-file generator)
@@ -27,6 +29,11 @@
                                        :if-does-not-exist :create)
     (declare (special *latex-stream*))
     (write-line "\\documentclass[a4paper]{article}" *latex-stream*)
+    (when (listings generator)
+      (\\command "usepackage" "listings")
+      (\\command "lstset" "language=lisp")
+      (when (stringp (listings generator))
+        (\\command "lstset" (listings generator))))
     (\\command "title" (title generator))
     (\\command "date" "")
     (\\command "begin" "document")
@@ -34,19 +41,19 @@
     (\\command "tableofcontents")
     (dolist (section (contents book))
       (dolist (part section)
-        (generate-part part)))
+        (generate-part part generator)))
     (\\command "end" "document")))
 
-(defmethod generate-part ((part code-part))
-  (\\command "begin" "verbatim")
+(defmethod generate-part ((part code-part) (generator latex-generator))
+  (\\command "begin" (if (listings generator) "lstlisting" "verbatim"))
   (write-string (text part) *latex-stream*)
   (terpri *latex-stream*)
-  (\\command "end" "verbatim"))
+  (\\command "end" (if (listings generator) "lstlisting" "verbatim")))
 
-(defmethod generate-part ((part whitespace-part))
+(defmethod generate-part ((part whitespace-part) (generator latex-generator))
   (write-string (text part) *latex-stream*))
 
-(defmethod generate-part ((part heading-part))
+(defmethod generate-part ((part heading-part) (generator latex-generator))
   (write-string (ecase (depth part)
                   (1 "\\section{")
                   (2 "\\subsection{")
@@ -57,7 +64,7 @@
   (write-string "}" *latex-stream*)
   (terpri *latex-stream*))
 
-(defmethod generate-part ((part comment-part))
+(defmethod generate-part ((part comment-part) (generator latex-generator))
   (write-latex-escaped (text part) *latex-stream*))
 
 (defun write-latex-escaped (string stream)
