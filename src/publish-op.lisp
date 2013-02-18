@@ -13,14 +13,14 @@
 
 (defclass publish-op (asdf:operation)
   ((generator :initarg :generator :accessor generator)
-   (input-file :initarg :input-file :accessor input-file)))
+   (input-file :initform nil :initarg :input-file :accessor input-file)))
 
-(defmethod asdf::traverse :before ((op publish-op) (system asdf:system))
-  (unless (slot-boundp op 'input-file)
-    (setf (input-file op) (asdf:system-definition-pathname system))))
+(defmethod input-files ((op publish-op) (system asdf:system))
+  (let ((x (or (input-file op) (asdf:system-source-file system))))
+    (and x (list x))))
 
 (defmethod asdf:perform ((op publish-op) (system asdf:system))
-  (publish-qbook (input-file op) (generator op)))
+  (publish-qbook (first (input-files op system)) (generator op)))
 
 (defmethod asdf:perform ((op publish-op) (component t))
   t)
